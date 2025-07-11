@@ -47,7 +47,7 @@ impl<'a> Request<'a> {
         let mut http = buf_line
             .split_whitespace();
         // dbg!(&http);
-        dbg!(&buf_line);
+        // dbg!(&buf_line);
         let method = bump.alloc_str(http.next().ok_or_else(|| {
             std::io::Error::new(ErrorKind::InvalidData, "missing method")
         })?);
@@ -61,7 +61,7 @@ impl<'a> Request<'a> {
         let protocol = bump.alloc_str(http.next().ok_or_else(|| {
             std::io::Error::new(ErrorKind::InvalidData, "missing protocol")
         })?);
-        dbg!(&method, &path, &protocol);
+        // dbg!(&method, &path, &protocol);
         let headers = { 
             http.next().ok_or("");
             let mut headers = HashMap::new();

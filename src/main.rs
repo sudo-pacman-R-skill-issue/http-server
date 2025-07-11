@@ -11,7 +11,6 @@ mod second {
 
 fn main() -> Result<(), Error> {
     let listener = TcpListener::bind("127.0.0.1:4221")?;
-    let bytes_buffer: Vec<u8> = Vec::with_capacity(512);
     let bump = Bump::new();
     for stream in listener.incoming() {
         match stream {
@@ -24,6 +23,9 @@ fn main() -> Result<(), Error> {
                         HttpTemplates::PlainText.format(result)
                     },
                     ("GET", "") => HttpTemplates::Slash.format(""),
+                    ("GET", "user-agent") => {
+                        let result = req.headers.get("User-Agent").unwrap().trim_end();
+                        HttpTemplates::PlainText.format(result)},
                     _ => HttpTemplates::NotFound.format("")
                 };
                 stream.write_all(f.as_slice())?;
