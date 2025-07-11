@@ -4,7 +4,7 @@ use http_server_lib::HttpTemplate;
 
 pub struct Request<'a> {
     pub method: &'a str,
-    pub path: &'a str,
+    pub path: Vec<&'a mut str>,
     pub protocol: &'a str,
     pub headers: HashMap<&'a mut str, &'a mut str>,
     pub body: Option<&'a str>,
@@ -14,7 +14,7 @@ impl<'a> Request<'a> {
     fn new() -> Self {
         Request {
             method: "",
-            path: "",
+            path: Vec::new(),
             protocol: "",
             headers: HashMap::new(),
             body: None,
@@ -23,7 +23,7 @@ impl<'a> Request<'a> {
     
     fn from(
         method: &'a str,
-        path: &'a str,
+        path: Vec<&'a mut str>,
         protocol: &'a str,
         headers: HashMap<&'a mut str, &'a mut str>,
     ) -> Self {
@@ -36,6 +36,10 @@ impl<'a> Request<'a> {
         }
     }
 
+    pub fn segment(&self, number: u8) -> Option<&str> {
+        self.path.get(number as usize).map(|v| &**v)
+    }
+
     pub fn from_stream(stream: &TcpStream, bump: &'a Bump) -> Result<Self, Error> {
         let mut buf_reader = BufReader::new(stream);
         let mut buf_line = String::new();
@@ -43,16 +47,21 @@ impl<'a> Request<'a> {
         let mut http = buf_line
             .split_whitespace();
         // dbg!(&http);
-        // dbg!(&buf_line);
+        dbg!(&buf_line);
         let method = bump.alloc_str(http.next().ok_or_else(|| {
             std::io::Error::new(ErrorKind::InvalidData, "missing method")
         })?);
-        let path = bump.alloc_str(http.next().ok_or_else(|| {
-            std::io::Error::new(ErrorKind::InvalidData, "missing path")
-        })?);
+        let path = http.next()
+            .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidData, "missing path"))
+            .unwrap()
+            .split("/")
+            .map(|e| bump.alloc_str(e))
+            .collect::<Vec<&mut str>>();
+        
         let protocol = bump.alloc_str(http.next().ok_or_else(|| {
             std::io::Error::new(ErrorKind::InvalidData, "missing protocol")
         })?);
+        dbg!(&method, &path, &protocol);
         let headers = { 
             http.next().ok_or("");
             let mut headers = HashMap::new();
@@ -109,3 +118,5 @@ impl HttpTemplates {
         }
     }
 }
+
+pub struct StatusCode {}

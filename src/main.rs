@@ -5,7 +5,6 @@ use bumpalo::Bump;
 
 use crate::lib::{HttpTemplates, Request};
 mod lib;
-// use crate::lib::req_handler;
 mod second {
     include!("../src_1/main.rs");
 }
@@ -17,10 +16,14 @@ fn main() -> Result<(), Error> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                // dbg!(&stream);
                 let req = Request::from_stream(&stream, &bump)?;
-                let f = match req.path {
-                    "/" => HttpTemplates::Slash.format(""),
+                let f = match (req.method, req.segment(1).unwrap_or("_")) {
+                    ("GET", "echo") => {
+                        let result = req.segment(2).unwrap();
+                        dbg!(&result);
+                        HttpTemplates::PlainText.format(result)
+                    },
+                    ("GET", "") => HttpTemplates::Slash.format(""),
                     _ => HttpTemplates::NotFound.format("")
                 };
                 stream.write_all(f.as_slice())?;
