@@ -22,7 +22,7 @@ fn main() {
                 println!("accepted new connection");
             }
             Err(e) => {
-                println!("error: {}", e);
+                println!("{}", e);
             }
         }
     }
