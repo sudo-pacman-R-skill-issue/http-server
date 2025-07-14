@@ -39,7 +39,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Error> {
             }
             ("GET", "") => HttpTemplates::Slash.format(""),
             ("GET", "user-agent") => {
-                let result = req.headers.get("User-Agent").unwrap().trim_end();
+                let result = req.headers.get("user-agent").unwrap().trim_end();
                 HttpTemplates::PlainText.format(result)
             }
             _ => HttpTemplates::NotFound.format(""),
