@@ -81,7 +81,7 @@ impl Request {
                     break;
                 }
                 if let Some((key, value)) = lline.split_once(": ") {
-                    headers.insert(key.to_lowercase(), value.to_lowercase());
+                    headers.insert(key.to_lowercase(), value.to_lowercase().trim_end().to_string());
                 }
             }
             headers

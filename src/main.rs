@@ -1,4 +1,4 @@
-use crate::lib::{HttpTemplates, Request, DIR};
+use crate::lib::{Body, HttpTemplates, Request, DIR};
 use std::{
     fs, io::{BufReader, Error, Write}, net::{TcpListener, TcpStream}, thread
 };
@@ -55,6 +55,15 @@ fn handle_connection(mut stream: BufReader<TcpStream>) -> Result<(), Error> {
                         HttpTemplates::NotFound.format("")
                     }
                 }
+            }
+            ("POST", "files") => {
+                let filename = req.segment(2).unwrap();
+                let full_path = std::path::Path::new(DIR.as_ref().unwrap()).join(filename);
+                dbg!(&req);
+                let content_length = req.headers.get("content-length").unwrap().parse::<usize>().unwrap();
+                Body::read_body(&mut req.body, content_length, &mut stream);
+                fs::write(full_path, req.body.unwrap().as_bytes())?;
+                HttpTemplates::Created.format("")
             }
             _ => HttpTemplates::NotFound.format(""),
         };
