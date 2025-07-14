@@ -1,7 +1,6 @@
-use crate::lib::{HttpTemplates, Request};
+use crate::lib::{HttpTemplates, Request, DIR};
 use std::{
-    io::{Error, ErrorKind, Write},
-    net::{TcpListener, TcpStream}, thread,
+    fs, io::{BufReader, Error, Write}, net::{TcpListener, TcpStream}, thread
 };
 mod lib;
 mod second {
@@ -13,6 +12,7 @@ fn main() -> Result<(), Error> {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                let stream = BufReader::new(stream);
                 thread::spawn( move || handle_connection(stream));
             }
             Err(e) => {
@@ -23,9 +23,9 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream) -> Result<(), Error> {
+fn handle_connection(mut stream: BufReader<TcpStream>) -> Result<(), Error> {
     loop {
-        let req = Request::from_stream(&stream)?;
+        let mut req = Request::from_stream(&mut stream)?;
         if let Some(connection) = req.headers.get("connection") {
             if connection == "close" {
                 break;
@@ -42,8 +42,23 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Error> {
                 let result = req.headers.get("user-agent").unwrap().trim_end();
                 HttpTemplates::PlainText.format(result)
             }
+            ("GET", "files") => {
+                let filename = req.segment(2).unwrap();
+                let full_path = std::path::Path::new(DIR.as_ref().unwrap()).join(filename);
+                dbg!(&req);
+                match fs::read_to_string(full_path) {
+                    Ok(file) => {
+                        HttpTemplates::OctetStream.format(&file)
+                    }
+                    Err(e) => {
+                        eprintln!("File doesnt exists: {e}");
+                        HttpTemplates::NotFound.format("")
+                    }
+                }
+            }
             _ => HttpTemplates::NotFound.format(""),
         };
+        let stream = stream.get_mut();
         stream.write_all(f.as_slice())?;
         stream.flush()?;
     }

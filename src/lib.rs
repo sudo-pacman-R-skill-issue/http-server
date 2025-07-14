@@ -1,13 +1,24 @@
-use std::{collections::HashMap, io::{BufRead, BufReader, Bytes, Error, ErrorKind, Read, Write}, net::TcpStream};
-use bumpalo::Bump;
-use http_server_lib::HttpTemplate;
+use std::{
+    collections::HashMap,
+    env, fs,
+    io::{BufRead, BufReader, Error, ErrorKind, Read},
+    net::TcpStream,
+    path::PathBuf,
+    sync::LazyLock,
+};
 
+pub static DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+    let args = dbg!(env::args().collect::<Vec<String>>());
+    read_args(args)
+});
+
+#[derive(Debug)]
 pub struct Request {
     pub method: String,
     pub path: Vec<String>,
     pub protocol: String,
     pub headers: HashMap<String, String>,
-    pub body: Option<String>,
+    pub body: Option<Body>,
 }
 
 impl Request {
@@ -17,10 +28,10 @@ impl Request {
             path: Vec::with_capacity(4),
             protocol: String::with_capacity(8),
             headers: HashMap::new(),
-            body: None,
+            body: Some(Body::Text("".to_string())),
         }
     }
-    
+
     fn from(
         method: String,
         path: Vec<String>,
@@ -32,35 +43,35 @@ impl Request {
             path,
             protocol,
             headers,
-            body: None,
+            body: Some(Body::Text("".to_string())),
         }
     }
 
     pub fn segment(&self, number: u8) -> Option<&str> {
         self.path.get(number as usize).map(|v| &**v)
     }
- 
-    pub fn  from_stream(stream: &TcpStream) -> Result<Self, Error> {
-        let mut buf_reader = BufReader::new(stream);
+
+    pub fn from_stream(buf_reader: &mut BufReader<TcpStream>) -> Result<Self, Error> {
         let mut buf_line = String::new();
         buf_reader.read_line(&mut buf_line)?;
         let mut http = buf_line.split_whitespace();
         // dbg!(&http);
-        let method = http.next().ok_or_else(|| {
-            std::io::Error::new(ErrorKind::InvalidData, "missing method")
-        })?;
-        let path: Vec<String> = http.next()
+        let method = http
+            .next()
+            .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidData, "missing method"))?;
+        let path: Vec<String> = http
+            .next()
             .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidData, "missing path"))
             .unwrap()
             .split("/")
             .map(|e| e.to_string())
             .collect();
-        
-        let protocol = http.next().ok_or_else(|| {
-            std::io::Error::new(ErrorKind::InvalidData, "missing protocol")
-        })?;
+
+        let protocol = http
+            .next()
+            .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidData, "missing protocol"))?;
         // dbg!(&method, &path, &protocol);
-        let headers = { 
+        let headers = {
             http.next().ok_or("");
             let mut headers = HashMap::new();
             loop {
@@ -75,7 +86,12 @@ impl Request {
             }
             headers
         };
-        Ok(Request::from(method.to_string(), path, protocol.to_string(), headers))
+        Ok(Request::from(
+            method.to_string(),
+            path,
+            protocol.to_string(),
+            headers,
+        ))
     }
 }
 
@@ -117,4 +133,70 @@ impl HttpTemplates {
     }
 }
 
-pub struct StatusCode {}
+pub fn read_args(args: Vec<String>) -> Option<std::path::PathBuf> {
+    if args.len() < 3 {
+        println!(
+            "
+        NO FLAGS *vine boom*. 
+        NO BALLS*vine boom*. 
+        AND PROBABLY NO BUTTHOLE SINCE THIS GUY FEEDS ON RADIATION*boosted vine boom*
+        "
+        );
+        None
+    } else if args[1] == "--directory" {
+        Some(std::path::PathBuf::from(&args[2]))
+    } else {
+        None
+    }
+}
+
+pub fn save_file(filename: &str, body: &[u8]) -> std::io::Result<()> {
+    let file_path = DIR.as_ref().unwrap().join(filename);
+    fs::write(file_path, body)
+}
+
+#[derive(Debug)]
+pub enum Body {
+    Text(String),
+    Binary(Vec<u8>),
+}
+impl Body {
+    pub fn read_body(
+        body: &mut Option<Body>,
+        content_length: usize,
+        buf_reader: &mut BufReader<TcpStream>,
+    ) {
+        dbg!(&content_length);
+        let mut buffer = vec![0; content_length];
+        match buf_reader.read_exact(&mut buffer) {
+            Ok(()) => {
+                *body = Some(Body::from_bytes(buffer));
+            }
+            Err(e) => {
+                println!("Ошибка чтения тела: {e}");
+                *body = Some(Body::Binary(Vec::new()));
+            }
+        }
+    }
+
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Body::Text(s) => Some(s),
+            Body::Binary(_) => None,
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Body::Text(s) => s.as_bytes(),
+            Body::Binary(b) => b,
+        }
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        match String::from_utf8(bytes.clone()) {
+            Ok(s) => Body::Text(s),
+            Err(_) => Body::Binary(bytes),
+        }
+    }
+}
